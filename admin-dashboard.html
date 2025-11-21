@@ -19,9 +19,48 @@
       margin: 0;
       padding: 20px;
     }
+    .layout {
+      display: flex;
+      gap: 20px;
+      align-items: flex-start;
+    }
+    .sidebar {
+      width: 260px;
+      background: #ffffff;
+      border-radius: 12px;
+      padding: 15px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+      height: calc(100vh - 60px);
+      overflow-y: auto;
+    }
+    .sidebar h3 {
+      margin-top: 0;
+      font-size: 17px;
+      margin-bottom: 10px;
+    }
+    #docList {
+      font-size: 13px;
+    }
+    .doc-item {
+      padding: 8px 10px;
+      border-radius: 8px;
+      background: #f3f4f6;
+      margin-bottom: 8px;
+      cursor: pointer;
+      font-size: 13px;
+      border: 1px solid transparent;
+      word-break: break-all;
+    }
+    .doc-item:hover {
+      background: #e5e7eb;
+    }
+    .doc-item.active {
+      border: 1px solid #3b82f6;
+      background: #dbeafe;
+    }
     .container {
+      flex: 1;
       max-width: 900px;
-      margin: 0 auto;
       background: white;
       border-radius: 12px;
       padding: 20px 24px 30px;
@@ -179,63 +218,72 @@
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1>📦 AntiFake Admin Dashboard</h1>
-    <div class="sub">
-      - Tạo/Sửa lịch sử xuất xưởng  
-      - Xuất QR Logistics  
-      - Kiểm tra hành trình trong Firestore  
+  <div class="layout">
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+      <h3>📋 Danh sách sản phẩm</h3>
+      <div id="docList">Đang tải...</div>
     </div>
 
-    <!-- INPUT CONTRACT + TOKEN -->
-    <div class="row">
-      <div class="field-group">
-        <label>Contract Address</label>
-        <input type="text" id="inputContract" placeholder="vd: 0xabc..." />
+    <!-- MAIN DASHBOARD -->
+    <div class="container">
+      <h1>📦 AntiFake Admin Dashboard</h1>
+      <div class="sub">
+        - Tạo/Sửa lịch sử xuất xưởng<br/>
+        - Xuất QR Logistics<br/>
+        - Kiểm tra hành trình trong Firestore
       </div>
-      <div class="field-group" style="max-width:150px;">
-        <label>Token ID</label>
-        <input type="text" id="inputTokenId" placeholder="vd: 1" />
-      </div>
-    </div>
 
-    <div class="row">
-      <button class="btn btn-secondary" id="btnLoad">🔄 Load Firestore</button>
-      <button class="btn btn-primary" id="btnNew">➕ Tạo doc xuất xưởng</button>
-    </div>
-
-    <div class="status" id="status"></div>
-    <div class="pill-docid" id="docIdLabel" style="display:none;"></div>
-
-    <!-- HISTORY SECTION -->
-    <div class="history-container">
-      <div class="history-header">
-        <div><strong>Lịch sử vận chuyển (history[])</strong></div>
-        <div>
-          <button class="btn btn-secondary" id="btnAddRow">➕ Thêm dòng</button>
-          <button class="btn btn-primary" id="btnSave">💾 Lưu</button>
+      <!-- INPUT CONTRACT + TOKEN -->
+      <div class="row">
+        <div class="field-group">
+          <label>Contract Address</label>
+          <input type="text" id="inputContract" placeholder="vd: 0xabc..." />
+        </div>
+        <div class="field-group" style="max-width:150px;">
+          <label>Token ID</label>
+          <input type="text" id="inputTokenId" placeholder="vd: 1" />
         </div>
       </div>
 
-      <div class="history-list" id="historyList">
-        <div style="font-size:13px; color:#6b7280;">
-          Chưa có dữ liệu. Load hoặc tạo mới.
+      <div class="row">
+        <button class="btn btn-secondary" id="btnLoad">🔄 Load Firestore</button>
+        <button class="btn btn-primary" id="btnNew">➕ Tạo doc xuất xưởng</button>
+      </div>
+
+      <div class="status" id="status"></div>
+      <div class="pill-docid" id="docIdLabel" style="display:none;"></div>
+
+      <!-- HISTORY SECTION -->
+      <div class="history-container">
+        <div class="history-header">
+          <div><strong>Lịch sử vận chuyển (history[])</strong></div>
+          <div>
+            <button class="btn btn-secondary" id="btnAddRow">➕ Thêm dòng</button>
+            <button class="btn btn-primary" id="btnSave">💾 Lưu</button>
+          </div>
+        </div>
+
+        <div class="history-list" id="historyList">
+          <div style="font-size:13px; color:#6b7280;">
+            Chưa có dữ liệu. Load hoặc tạo mới.
+          </div>
         </div>
       </div>
-    </div>
 
-    <!-- QR SECTION -->
-    <div class="qr-section">
-      <h2>🔗 QR Logistics (cập nhật hành trình)</h2>
+      <!-- QR SECTION -->
+      <div class="qr-section">
+        <h2>🔗 QR Logistics (cập nhật hành trình)</h2>
 
-      <button class="btn btn-secondary" id="btnGenerateQR">📷 Tạo QR logistics</button>
+        <button class="btn btn-secondary" id="btnGenerateQR">📷 Tạo QR logistics</button>
 
-      <div id="qrBox" style="margin-top:20px; display:none;">
-        <div id="qrcode"></div>
+        <div id="qrBox" style="margin-top:20px; display:none;">
+          <div id="qrcode"></div>
 
-        <div style="margin-top:10px;">
-          <button class="btn btn-primary" id="btnDownloadQR">⬇ Tải QR</button>
-          <button class="btn btn-secondary" id="btnPrintQR">🖨 In QR</button>
+          <div style="margin-top:10px;">
+            <button class="btn btn-primary" id="btnDownloadQR">⬇ Tải QR</button>
+            <button class="btn btn-secondary" id="btnPrintQR">🖨 In QR</button>
+          </div>
         </div>
       </div>
     </div>
@@ -243,14 +291,14 @@
 
   <script>
     /* ---------------- FIREBASE ---------------- */
-	const firebaseConfig = {
-	  apiKey: "AIzaSyDZIhRAMHA7kziU18qToyJCVaJPI2o6v2c",
-	  authDomain: "antifakenft.firebaseapp.com",
-	  projectId: "antifakenft",
-	  storageBucket: "antifakenft.firebasestorage.app",
-	  messagingSenderId: "1065470282920",
-	  appId: "1:1065470282920:web:43537b5f233e27ffeb069d"
-	};
+    const firebaseConfig = {
+      apiKey: "AIzaSyDZIhRAMHA7kziU18qToyJCVaJPI2o6v2c",
+      authDomain: "antifakenft.firebaseapp.com",
+      projectId: "antifakenft",
+      storageBucket: "antifakenft.firebasestorage.app",
+      messagingSenderId: "1065470282920",
+      appId: "1:1065470282920:web:43537b5f233e27ffeb069d"
+    };
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
 
@@ -286,7 +334,7 @@
     function renderHistory() {
       historyListEl.innerHTML = "";
       if (currentHistory.length === 0) {
-        historyListEl.innerHTML = `<div style="color:#6b7280;">Chưa có data.</div>`;
+        historyListEl.innerHTML = '<div style="color:#6b7280;">Chưa có data.</div>';
         return;
       }
 
@@ -305,7 +353,7 @@
               <label>Thời gian</label>
               <div class="timestamp-row">
                 <input type="text" id="time_${idx}" value="${item.timestamp || ""}">
-                <button class="btn btn-secondary btn-small" onclick="document.getElementById('time_${idx}').value=getNowIsoPlus7()">⏱</button>
+                <button class="btn btn-secondary btn-small" type="button" onclick="document.getElementById('time_${idx}').value=getNowIsoPlus7()">⏱</button>
               </div>
             </div>
             <div>
@@ -314,7 +362,7 @@
             </div>
           </div>
           <div class="history-actions">
-            <button class="btn btn-danger btn-small" onclick="deleteRow(${idx})">🗑 Xoá</button>
+            <button class="btn btn-danger btn-small" type="button" onclick="deleteRow(${idx})">🗑 Xoá</button>
           </div>
         `;
 
@@ -327,34 +375,93 @@
       renderHistory();
     }
 
-    /* ---------------- BUTTON ACTIONS ---------------- */
+    /* ---------------- LOAD TẤT CẢ DOCUMENTS ---------------- */
+    async function loadAllDocuments() {
+      const box = document.getElementById("docList");
+      box.innerHTML = "Đang tải...";
 
-    document.getElementById("btnLoad").onclick = async () => {
-      const docId = getDocId();
-      if (!docId) return setStatus("Thiếu contract hoặc tokenId", true);
+      try {
+        const snap = await db.collection("delivering_history").get();
 
+        if (snap.empty) {
+          box.innerHTML = "<div>Chưa có document nào.</div>";
+          return;
+        }
+
+        box.innerHTML = "";
+
+        snap.forEach(doc => {
+          const id = doc.id;
+
+          const el = document.createElement("div");
+          el.className = "doc-item";
+          el.textContent = id;
+
+          el.onclick = () => {
+            document.querySelectorAll(".doc-item").forEach(i => i.classList.remove("active"));
+            el.classList.add("active");
+
+            const [contract, tokenId] = id.split(":");
+            document.getElementById("inputContract").value = contract;
+            document.getElementById("inputTokenId").value = tokenId;
+
+            loadDocumentData(id);
+          };
+
+          box.appendChild(el);
+        });
+      } catch (err) {
+        box.innerHTML = "Lỗi load dữ liệu!";
+        console.error(err);
+      }
+    }
+
+    async function loadDocumentData(docId) {
       currentDocId = docId;
       document.getElementById("docIdLabel").style.display = "inline-block";
       document.getElementById("docIdLabel").textContent = docId;
 
-      setStatus("Đang load...", false);
+      setStatus("Đang load Firestore...", false);
+
       const snap = await db.collection("delivering_history").doc(docId).get();
 
       if (!snap.exists) {
         currentHistory = [];
         renderHistory();
-        return setStatus("Doc chưa tồn tại. Tạo mới đi.", true);
+        setStatus("Doc không tồn tại!", true);
+        return;
       }
 
       const data = snap.data();
       currentHistory = data.history || [];
+
       renderHistory();
-      setStatus("Đã load.", false);
+      setStatus("Đã load xong!", false);
+    }
+
+    /* ---------------- BUTTON ACTIONS ---------------- */
+
+    document.getElementById("btnLoad").onclick = async () => {
+      const docId = getDocId();
+      if (!docId) {
+        setStatus("Thiếu contract hoặc tokenId", true);
+        return;
+      }
+
+      // set active in sidebar if exists
+      document.querySelectorAll(".doc-item").forEach(i => {
+        i.classList.toggle("active", i.textContent === docId);
+      });
+
+      await loadDocumentData(docId);
     };
 
     document.getElementById("btnNew").onclick = () => {
       const docId = getDocId();
-      if (!docId) return setStatus("Thiếu contract/token", true);
+      if (!docId) {
+        setStatus("Thiếu contract/token", true);
+        return;
+      }
 
       currentDocId = docId;
       currentHistory = [];
@@ -367,6 +474,14 @@
     };
 
     document.getElementById("btnAddRow").onclick = () => {
+      if (!currentDocId) {
+        const docId = getDocId();
+        if (!docId) {
+          setStatus("Hãy nhập contract + tokenId trước.", true);
+          return;
+        }
+        currentDocId = docId;
+      }
       currentHistory.push({
         location: "",
         timestamp: getNowIsoPlus7(),
@@ -376,7 +491,10 @@
     };
 
     document.getElementById("btnSave").onclick = async () => {
-      if (!currentDocId) return;
+      if (!currentDocId) {
+        setStatus("Chưa có Doc ID để lưu.", true);
+        return;
+      }
 
       const updated = currentHistory.map((_, idx) => ({
         location: document.getElementById("loc_" + idx).value,
@@ -396,13 +514,17 @@
     };
 
     /* ---------------- QR LOGISTICS ---------------- */
-
     let qr;
 
     document.getElementById("btnGenerateQR").onclick = () => {
-      if (!currentDocId) return setStatus("Load document trước!", true);
+      if (!currentDocId) {
+        setStatus("Load hoặc tạo document trước!", true);
+        return;
+      }
 
-      const [c, tid] = currentDocId.split(":");
+      const parts = currentDocId.split(":");
+      const c = parts[0];
+      const tid = parts[1];
 
       const qrUrl = `https://logistics-gules.vercel.app/logistics-update.html?contract=${c}&tokenId=${tid}`;
 
@@ -446,6 +568,9 @@
       `);
       win.document.close();
     };
+
+    // Load sidebar documents on start
+    loadAllDocuments();
   </script>
 </body>
 </html>
