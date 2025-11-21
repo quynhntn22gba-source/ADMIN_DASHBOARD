@@ -278,8 +278,16 @@
         <button class="btn btn-secondary" id="btnGenerateQR">📷 Tạo QR logistics</button>
 
         <div id="qrBox" style="margin-top:20px; display:none;">
+        
+          <label style="font-size:13px; font-weight:600;">Link QR Logistics</label>
+          <input type="text" id="qrLink" readonly style="width:100%; padding:8px; border-radius:6px; border:1px solid #ddd; margin-bottom:10px;" />
+        
+          <button class="btn btn-secondary btn-small" id="btnCopyQR" type="button" style="margin-bottom:15px;">
+            📋 Copy link
+          </button>
+        
           <div id="qrcode"></div>
-
+        
           <div style="margin-top:10px;">
             <button class="btn btn-primary" id="btnDownloadQR">⬇ Tải QR</button>
             <button class="btn btn-secondary" id="btnPrintQR">🖨 In QR</button>
@@ -521,24 +529,30 @@
         setStatus("Load hoặc tạo document trước!", true);
         return;
       }
-
+    
       const parts = currentDocId.split(":");
       const c = parts[0];
       const tid = parts[1];
-
+    
       const qrUrl = `https://logistics-gules.vercel.app/logistics-update.html?contract=${c}&tokenId=${tid}`;
-
+    
+      // Hiển thị UI
       document.getElementById("qrBox").style.display = "block";
       document.getElementById("qrcode").innerHTML = "";
-
+    
+      // Set link vào input
+      document.getElementById("qrLink").value = qrUrl;
+    
+      // Tạo QR
       qr = new QRCode(document.getElementById("qrcode"), {
         text: qrUrl,
         width: 200,
         height: 200
       });
-
+    
       setStatus("QR đã tạo!", false);
     };
+
 
     document.getElementById("btnDownloadQR").onclick = () => {
       const img = document.querySelector("#qrcode img");
@@ -568,9 +582,16 @@
       `);
       win.document.close();
     };
+    document.getElementById("btnCopyQR").onclick = () => {
+  const link = document.getElementById("qrLink").value;
+  navigator.clipboard.writeText(link);
+  setStatus("Đã copy link QR!", false);
+};
+
 
     // Load sidebar documents on start
     loadAllDocuments();
   </script>
 </body>
 </html>
+
