@@ -9,6 +9,9 @@
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
 
+  <!-- QRCode generator -->
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+
   <style>
     body {
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -83,6 +86,10 @@
       background: #ef4444;
       color: white;
     }
+    .btn-small {
+      font-size: 12px;
+      padding: 4px 8px;
+    }
     .btn:disabled {
       opacity: 0.6;
       cursor: not-allowed;
@@ -90,7 +97,13 @@
     .status {
       margin-top: 8px;
       font-size: 13px;
-      color: #4b5563;
+      min-height: 18px;
+    }
+    .status.error {
+      color: #b91c1c;
+    }
+    .status.success {
+      color: #15803d;
     }
 
     .history-container {
@@ -148,21 +161,37 @@
       font-size: 12px;
       margin-top: 4px;
     }
+    .timestamp-row {
+      display: flex;
+      align-items: flex-end;
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+    #qrcode img {
+      width: 200px;
+      height: 200px;
+    }
+    .qr-section {
+      margin-top: 35px;
+      padding-top: 20px;
+      border-top: 1px solid #e5e7eb;
+    }
   </style>
 </head>
 <body>
   <div class="container">
     <h1>📦 AntiFake Admin Dashboard</h1>
     <div class="sub">
-      Dashboard nội bộ để cập nhật lịch sử vận chuyển (<code>delivering_history</code>) trên Firestore.<br/>
-      ⚠ Chỉ dùng cho admin nội bộ, không public cho khách hàng.
+      - Tạo/Sửa lịch sử xuất xưởng  
+      - Xuất QR Logistics  
+      - Kiểm tra hành trình trong Firestore  
     </div>
 
-    <!-- CHỌN SẢN PHẨM -->
+    <!-- INPUT CONTRACT + TOKEN -->
     <div class="row">
       <div class="field-group">
         <label>Contract Address</label>
-        <input type="text" id="inputContract" placeholder="vd: 0xabc123..." />
+        <input type="text" id="inputContract" placeholder="vd: 0xabc..." />
       </div>
       <div class="field-group" style="max-width:150px;">
         <label>Token ID</label>
@@ -171,33 +200,49 @@
     </div>
 
     <div class="row">
-      <button class="btn btn-secondary" id="btnLoad">🔄 Load từ Firestore</button>
-      <button class="btn btn-primary" id="btnNew">➕ Tạo doc mới (nếu chưa có)</button>
+      <button class="btn btn-secondary" id="btnLoad">🔄 Load Firestore</button>
+      <button class="btn btn-primary" id="btnNew">➕ Tạo doc xuất xưởng</button>
     </div>
 
     <div class="status" id="status"></div>
     <div class="pill-docid" id="docIdLabel" style="display:none;"></div>
 
-    <!-- LỊCH SỬ VẬN CHUYỂN -->
+    <!-- HISTORY SECTION -->
     <div class="history-container">
       <div class="history-header">
         <div><strong>Lịch sử vận chuyển (history[])</strong></div>
         <div>
-          <button class="btn btn-secondary" id="btnAddRow">➕ Thêm dòng timeline</button>
-          <button class="btn btn-primary" id="btnSave">💾 Lưu thay đổi</button>
+          <button class="btn btn-secondary" id="btnAddRow">➕ Thêm dòng</button>
+          <button class="btn btn-primary" id="btnSave">💾 Lưu</button>
         </div>
       </div>
 
       <div class="history-list" id="historyList">
         <div style="font-size:13px; color:#6b7280;">
-          Chưa có dữ liệu. Hãy nhập contract + tokenId rồi bấm <b>Load từ Firestore</b>.
+          Chưa có dữ liệu. Load hoặc tạo mới.
+        </div>
+      </div>
+    </div>
+
+    <!-- QR SECTION -->
+    <div class="qr-section">
+      <h2>🔗 QR Logistics (cập nhật hành trình)</h2>
+
+      <button class="btn btn-secondary" id="btnGenerateQR">📷 Tạo QR logistics</button>
+
+      <div id="qrBox" style="margin-top:20px; display:none;">
+        <div id="qrcode"></div>
+
+        <div style="margin-top:10px;">
+          <button class="btn btn-primary" id="btnDownloadQR">⬇ Tải QR</button>
+          <button class="btn btn-secondary" id="btnPrintQR">🖨 In QR</button>
         </div>
       </div>
     </div>
   </div>
 
   <script>
-    /* ------------ FIREBASE INIT ------------ */
+    /* ---------------- FIREBASE ---------------- */
 	const firebaseConfig = {
 	  apiKey: "AIzaSyDZIhRAMHA7kziU18qToyJCVaJPI2o6v2c",
 	  authDomain: "antifakenft.firebaseapp.com",
@@ -209,206 +254,197 @@
     firebase.initializeApp(firebaseConfig);
     const db = firebase.firestore();
 
-    /* ------------ STATE ------------ */
+    /* ---------------- STATE ---------------- */
     let currentDocId = null;
     let currentHistory = [];
 
     const statusEl = document.getElementById("status");
-    const docIdLabel = document.getElementById("docIdLabel");
     const historyListEl = document.getElementById("historyList");
 
-    function setStatus(msg, isError = false) {
-      statusEl.textContent = msg || "";
-      statusEl.style.color = isError ? "#b91c1c" : "#4b5563";
+    function setStatus(msg, isError) {
+      statusEl.textContent = msg;
+      statusEl.className = "status " + (isError ? "error" : "success");
     }
 
-    function getDocIdFromInput() {
-      const contract = document.getElementById("inputContract").value.trim();
-      const tokenId = document.getElementById("inputTokenId").value.trim();
-      if (!contract || !tokenId) return null;
-      return `${contract}:${tokenId}`;
+    /* ---------------- UTIL ---------------- */
+    function getDocId() {
+      const c = document.getElementById("inputContract").value.trim();
+      const t = document.getElementById("inputTokenId").value.trim();
+      return c && t ? `${c}:${t}` : null;
     }
 
-    /* ------------ RENDER HISTORY ------------ */
+    function getNowIsoPlus7() {
+      const now = new Date();
+      const utcMs = now.getTime() + now.getTimezoneOffset() * 60000;
+      const plus7 = new Date(utcMs + 7 * 3600 * 1000);
+
+      const pad = (n) => n.toString().padStart(2, "0");
+      return `${plus7.getFullYear()}-${pad(plus7.getMonth()+1)}-${pad(plus7.getDate())}T${pad(plus7.getHours())}:${pad(plus7.getMinutes())}:${pad(plus7.getSeconds())}+07:00`;
+    }
+
+    /* ---------------- RENDER HISTORY ---------------- */
     function renderHistory() {
       historyListEl.innerHTML = "";
-
-      if (!currentHistory || currentHistory.length === 0) {
-        historyListEl.innerHTML = `<div style="font-size:13px; color:#6b7280;">
-          Chưa có entry nào. Bấm <b>Thêm dòng timeline</b> để tạo mới.
-        </div>`;
+      if (currentHistory.length === 0) {
+        historyListEl.innerHTML = `<div style="color:#6b7280;">Chưa có data.</div>`;
         return;
       }
 
       currentHistory.forEach((item, idx) => {
-        const wrap = document.createElement("div");
-        wrap.className = "history-item";
+        const el = document.createElement("div");
+        el.className = "history-item";
 
-        const idxLabel = document.createElement("div");
-        idxLabel.className = "history-item-index";
-        idxLabel.textContent = "#" + (idx + 1);
-        wrap.appendChild(idxLabel);
+        el.innerHTML = `
+          <div class="history-item-index">#${idx+1}</div>
+          <div class="history-item-fields">
+            <div>
+              <label>Địa điểm</label>
+              <input type="text" id="loc_${idx}" value="${item.location || ""}">
+            </div>
+            <div>
+              <label>Thời gian</label>
+              <div class="timestamp-row">
+                <input type="text" id="time_${idx}" value="${item.timestamp || ""}">
+                <button class="btn btn-secondary btn-small" onclick="document.getElementById('time_${idx}').value=getNowIsoPlus7()">⏱</button>
+              </div>
+            </div>
+            <div>
+              <label>Ghi chú</label>
+              <textarea id="note_${idx}">${item.note || ""}</textarea>
+            </div>
+          </div>
+          <div class="history-actions">
+            <button class="btn btn-danger btn-small" onclick="deleteRow(${idx})">🗑 Xoá</button>
+          </div>
+        `;
 
-        const fields = document.createElement("div");
-        fields.className = "history-item-fields";
-
-        // Location
-        const locWrap = document.createElement("div");
-        const locLabel = document.createElement("label");
-        locLabel.textContent = "Địa điểm (location)";
-        const locInput = document.createElement("input");
-        locInput.type = "text";
-        locInput.value = item.location || "";
-        locInput.oninput = (e) => {
-          currentHistory[idx].location = e.target.value;
-        };
-        locWrap.appendChild(locLabel);
-        locWrap.appendChild(locInput);
-
-        // Timestamp
-        const timeWrap = document.createElement("div");
-        const timeLabel = document.createElement("label");
-        timeLabel.textContent = "Thời gian (timestamp)";
-        const timeInput = document.createElement("input");
-        timeInput.type = "text";
-        timeInput.placeholder = "vd: 2025-11-21T15:00:00+07:00";
-        timeInput.value = item.timestamp || "";
-        timeInput.oninput = (e) => {
-          currentHistory[idx].timestamp = e.target.value;
-        };
-        timeWrap.appendChild(timeLabel);
-        timeWrap.appendChild(timeInput);
-
-        // Note
-        const noteWrap = document.createElement("div");
-        const noteLabel = document.createElement("label");
-        noteLabel.textContent = "Ghi chú (note)";
-        const noteInput = document.createElement("textarea");
-        noteInput.value = item.note || "";
-        noteInput.oninput = (e) => {
-          currentHistory[idx].note = e.target.value;
-        };
-        noteWrap.appendChild(noteLabel);
-        noteWrap.appendChild(noteInput);
-
-        fields.appendChild(locWrap);
-        fields.appendChild(timeWrap);
-        fields.appendChild(noteWrap);
-
-        wrap.appendChild(fields);
-
-        const act = document.createElement("div");
-        act.className = "history-actions";
-        const btnDel = document.createElement("button");
-        btnDel.className = "btn btn-danger";
-        btnDel.textContent = "🗑 Xoá dòng này";
-        btnDel.onclick = () => {
-          currentHistory.splice(idx, 1);
-          renderHistory();
-        };
-        act.appendChild(btnDel);
-        wrap.appendChild(act);
-
-        historyListEl.appendChild(wrap);
+        historyListEl.appendChild(el);
       });
     }
 
-    /* ------------ BUTTON HANDLERS ------------ */
+    function deleteRow(i) {
+      currentHistory.splice(i, 1);
+      renderHistory();
+    }
 
-    // Load từ Firestore
+    /* ---------------- BUTTON ACTIONS ---------------- */
+
     document.getElementById("btnLoad").onclick = async () => {
-      const docId = getDocIdFromInput();
-      if (!docId) {
-        setStatus("Vui lòng nhập đủ contract address và tokenId.", true);
-        return;
-      }
+      const docId = getDocId();
+      if (!docId) return setStatus("Thiếu contract hoặc tokenId", true);
 
-      setStatus("Đang tải dữ liệu từ Firestore...");
-      docIdLabel.style.display = "inline-block";
-      docIdLabel.textContent = "Doc ID: " + docId;
       currentDocId = docId;
+      document.getElementById("docIdLabel").style.display = "inline-block";
+      document.getElementById("docIdLabel").textContent = docId;
 
-      try {
-        const docRef = db.collection("delivering_history").doc(docId);
-        const snap = await docRef.get();
+      setStatus("Đang load...", false);
+      const snap = await db.collection("delivering_history").doc(docId).get();
 
-        if (!snap.exists) {
-          setStatus("Doc chưa tồn tại trong delivering_history. Bạn có thể bấm 'Tạo doc mới' để khởi tạo.", true);
-          currentHistory = [];
-          renderHistory();
-          return;
-        }
-
-        const data = snap.data();
-        currentHistory = Array.isArray(data.history) ? data.history : [];
-        setStatus("Đã load xong. Số dòng history: " + currentHistory.length);
+      if (!snap.exists) {
+        currentHistory = [];
         renderHistory();
-      } catch (err) {
-        console.error(err);
-        setStatus("Lỗi khi load Firestore: " + err.message, true);
+        return setStatus("Doc chưa tồn tại. Tạo mới đi.", true);
       }
+
+      const data = snap.data();
+      currentHistory = data.history || [];
+      renderHistory();
+      setStatus("Đã load.", false);
     };
 
-    // Tạo doc mới (nếu chưa có)
-    document.getElementById("btnNew").onclick = async () => {
-      const docId = getDocIdFromInput();
-      if (!docId) {
-        setStatus("Vui lòng nhập đủ contract address và tokenId.", true);
-        return;
-      }
+    document.getElementById("btnNew").onclick = () => {
+      const docId = getDocId();
+      if (!docId) return setStatus("Thiếu contract/token", true);
 
       currentDocId = docId;
-      docIdLabel.style.display = "inline-block";
-      docIdLabel.textContent = "Doc ID: " + docId;
-
       currentHistory = [];
       renderHistory();
-      setStatus("Doc mới (chưa lưu). Hãy thêm lịch sử rồi bấm Lưu thay đổi.");
+
+      document.getElementById("docIdLabel").style.display = "inline-block";
+      document.getElementById("docIdLabel").textContent = docId;
+
+      setStatus("Doc mới – hãy thêm dòng và LƯU.", false);
     };
 
-    // Thêm dòng timeline
     document.getElementById("btnAddRow").onclick = () => {
-      if (!currentDocId) {
-        const docId = getDocIdFromInput();
-        if (!docId) {
-          setStatus("Trước tiên hãy nhập contract + tokenId rồi bấm Load hoặc Tạo doc mới.", true);
-          return;
-        }
-        currentDocId = docId;
-        docIdLabel.style.display = "inline-block";
-        docIdLabel.textContent = "Doc ID: " + docId;
-      }
-
       currentHistory.push({
         location: "",
-        timestamp: "",
+        timestamp: getNowIsoPlus7(),
         note: ""
       });
       renderHistory();
     };
 
-    // Lưu thay đổi lên Firestore
     document.getElementById("btnSave").onclick = async () => {
-      if (!currentDocId) {
-        setStatus("Chưa có Doc ID. Hãy nhập contract + tokenId và Load/Tạo doc.", true);
-        return;
-      }
+      if (!currentDocId) return;
 
-      setStatus("Đang lưu lên Firestore...");
-      try {
-        const docRef = db.collection("delivering_history").doc(currentDocId);
-        await docRef.set(
-          {
-            productId: currentDocId,
-            history: currentHistory
-          },
-          { merge: true }
-        );
-        setStatus("Đã lưu thành công!");
-      } catch (err) {
-        console.error(err);
-        setStatus("Lỗi khi lưu Firestore: " + err.message, true);
-      }
+      const updated = currentHistory.map((_, idx) => ({
+        location: document.getElementById("loc_" + idx).value,
+        timestamp: document.getElementById("time_" + idx).value,
+        note: document.getElementById("note_" + idx).value
+      }));
+
+      await db.collection("delivering_history")
+        .doc(currentDocId)
+        .set({
+          productId: currentDocId,
+          history: updated
+        });
+
+      currentHistory = updated;
+      setStatus("Đã lưu!", false);
+    };
+
+    /* ---------------- QR LOGISTICS ---------------- */
+
+    let qr;
+
+    document.getElementById("btnGenerateQR").onclick = () => {
+      if (!currentDocId) return setStatus("Load document trước!", true);
+
+      const [c, tid] = currentDocId.split(":");
+
+      const qrUrl = `https://logistics-gules.vercel.app/logistics-update.html?contract=${c}&tokenId=${tid}`;
+
+      document.getElementById("qrBox").style.display = "block";
+      document.getElementById("qrcode").innerHTML = "";
+
+      qr = new QRCode(document.getElementById("qrcode"), {
+        text: qrUrl,
+        width: 200,
+        height: 200
+      });
+
+      setStatus("QR đã tạo!", false);
+    };
+
+    document.getElementById("btnDownloadQR").onclick = () => {
+      const img = document.querySelector("#qrcode img");
+      if (!img) return;
+
+      const a = document.createElement("a");
+      a.href = img.src;
+      a.download = currentDocId + "_QR.png";
+      a.click();
+    };
+
+    document.getElementById("btnPrintQR").onclick = () => {
+      const img = document.querySelector("#qrcode img");
+      if (!img) return;
+
+      const win = window.open("", "_blank");
+      win.document.write(`
+        <html>
+          <head><title>In QR</title></head>
+          <body style="text-align:center; font-family:sans-serif;">
+            <h2>QR Logistics</h2>
+            <p>${currentDocId}</p>
+            <img src="${img.src}" style="width:260px; margin-top:20px;">
+            <script>window.print();<\/script>
+          </body>
+        </html>
+      `);
+      win.document.close();
     };
   </script>
 </body>
