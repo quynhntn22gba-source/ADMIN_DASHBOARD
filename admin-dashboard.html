@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <title>AntiFake Admin Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- Firebase compat -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f3f4f6;
+      margin: 0;
+      padding: 20px;
+    }
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 12px;
+      padding: 20px 24px 30px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.08);
+    }
+    h1 {
+      margin-top: 0;
+      font-size: 24px;
+    }
+    .sub {
+      color: #555;
+      font-size: 14px;
+      margin-bottom: 20px;
+    }
+    .row {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 10px;
+      flex-wrap: wrap;
+    }
+    label {
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 4px;
+      display: block;
+    }
+    input[type="text"], textarea {
+      width: 100%;
+      padding: 8px 10px;
+      border-radius: 6px;
+      border: 1px solid #d1d5db;
+      font-size: 14px;
+      box-sizing: border-box;
+    }
+    textarea {
+      resize: vertical;
+      min-height: 60px;
+    }
+    .field-group {
+      flex: 1 1 200px;
+      min-width: 200px;
+    }
+    .btn {
+      padding: 8px 14px;
+      border-radius: 6px;
+      border: none;
+      font-size: 14px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .btn-primary {
+      background: #2563eb;
+      color: white;
+    }
+    .btn-secondary {
+      background: #e5e7eb;
+      color: #111827;
+    }
+    .btn-danger {
+      background: #ef4444;
+      color: white;
+    }
+    .btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    .status {
+      margin-top: 8px;
+      font-size: 13px;
+      color: #4b5563;
+    }
+
+    .history-container {
+      margin-top: 20px;
+      border-top: 1px solid #e5e7eb;
+      padding-top: 15px;
+    }
+    .history-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .history-list {
+      border-radius: 8px;
+      border: 1px solid #e5e7eb;
+      background: #f9fafb;
+      padding: 10px;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+    .history-item {
+      background: white;
+      border-radius: 8px;
+      padding: 10px;
+      margin-bottom: 8px;
+      border: 1px solid #e5e7eb;
+      position: relative;
+    }
+    .history-item-index {
+      position: absolute;
+      top: 8px;
+      right: 12px;
+      font-size: 12px;
+      color: #9ca3af;
+    }
+    .history-item-fields {
+      display: grid;
+      grid-template-columns: 2fr 1.5fr;
+      gap: 8px 10px;
+    }
+    .history-item textarea {
+      grid-column: 1 / -1;
+    }
+    .history-actions {
+      margin-top: 6px;
+      text-align: right;
+    }
+    .pill-docid {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 999px;
+      background: #eff6ff;
+      color: #1d4ed8;
+      font-size: 12px;
+      margin-top: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>📦 AntiFake Admin Dashboard</h1>
+    <div class="sub">
+      Dashboard nội bộ để cập nhật lịch sử vận chuyển (<code>delivering_history</code>) trên Firestore.<br/>
+      ⚠ Chỉ dùng cho admin nội bộ, không public cho khách hàng.
+    </div>
+
+    <!-- CHỌN SẢN PHẨM -->
+    <div class="row">
+      <div class="field-group">
+        <label>Contract Address</label>
+        <input type="text" id="inputContract" placeholder="vd: 0xabc123..." />
+      </div>
+      <div class="field-group" style="max-width:150px;">
+        <label>Token ID</label>
+        <input type="text" id="inputTokenId" placeholder="vd: 1" />
+      </div>
+    </div>
+
+    <div class="row">
+      <button class="btn btn-secondary" id="btnLoad">🔄 Load từ Firestore</button>
+      <button class="btn btn-primary" id="btnNew">➕ Tạo doc mới (nếu chưa có)</button>
+    </div>
+
+    <div class="status" id="status"></div>
+    <div class="pill-docid" id="docIdLabel" style="display:none;"></div>
+
+    <!-- LỊCH SỬ VẬN CHUYỂN -->
+    <div class="history-container">
+      <div class="history-header">
+        <div><strong>Lịch sử vận chuyển (history[])</strong></div>
+        <div>
+          <button class="btn btn-secondary" id="btnAddRow">➕ Thêm dòng timeline</button>
+          <button class="btn btn-primary" id="btnSave">💾 Lưu thay đổi</button>
+        </div>
+      </div>
+
+      <div class="history-list" id="historyList">
+        <div style="font-size:13px; color:#6b7280;">
+          Chưa có dữ liệu. Hãy nhập contract + tokenId rồi bấm <b>Load từ Firestore</b>.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /* ------------ FIREBASE INIT ------------ */
+	const firebaseConfig = {
+	  apiKey: "AIzaSyDZIhRAMHA7kziU18qToyJCVaJPI2o6v2c",
+	  authDomain: "antifakenft.firebaseapp.com",
+	  projectId: "antifakenft",
+	  storageBucket: "antifakenft.firebasestorage.app",
+	  messagingSenderId: "1065470282920",
+	  appId: "1:1065470282920:web:43537b5f233e27ffeb069d"
+	};
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    /* ------------ STATE ------------ */
+    let currentDocId = null;
+    let currentHistory = [];
+
+    const statusEl = document.getElementById("status");
+    const docIdLabel = document.getElementById("docIdLabel");
+    const historyListEl = document.getElementById("historyList");
+
+    function setStatus(msg, isError = false) {
+      statusEl.textContent = msg || "";
+      statusEl.style.color = isError ? "#b91c1c" : "#4b5563";
+    }
+
+    function getDocIdFromInput() {
+      const contract = document.getElementById("inputContract").value.trim();
+      const tokenId = document.getElementById("inputTokenId").value.trim();
+      if (!contract || !tokenId) return null;
+      return `${contract}:${tokenId}`;
+    }
+
+    /* ------------ RENDER HISTORY ------------ */
+    function renderHistory() {
+      historyListEl.innerHTML = "";
+
+      if (!currentHistory || currentHistory.length === 0) {
+        historyListEl.innerHTML = `<div style="font-size:13px; color:#6b7280;">
+          Chưa có entry nào. Bấm <b>Thêm dòng timeline</b> để tạo mới.
+        </div>`;
+        return;
+      }
+
+      currentHistory.forEach((item, idx) => {
+        const wrap = document.createElement("div");
+        wrap.className = "history-item";
+
+        const idxLabel = document.createElement("div");
+        idxLabel.className = "history-item-index";
+        idxLabel.textContent = "#" + (idx + 1);
+        wrap.appendChild(idxLabel);
+
+        const fields = document.createElement("div");
+        fields.className = "history-item-fields";
+
+        // Location
+        const locWrap = document.createElement("div");
+        const locLabel = document.createElement("label");
+        locLabel.textContent = "Địa điểm (location)";
+        const locInput = document.createElement("input");
+        locInput.type = "text";
+        locInput.value = item.location || "";
+        locInput.oninput = (e) => {
+          currentHistory[idx].location = e.target.value;
+        };
+        locWrap.appendChild(locLabel);
+        locWrap.appendChild(locInput);
+
+        // Timestamp
+        const timeWrap = document.createElement("div");
+        const timeLabel = document.createElement("label");
+        timeLabel.textContent = "Thời gian (timestamp)";
+        const timeInput = document.createElement("input");
+        timeInput.type = "text";
+        timeInput.placeholder = "vd: 2025-11-21T15:00:00+07:00";
+        timeInput.value = item.timestamp || "";
+        timeInput.oninput = (e) => {
+          currentHistory[idx].timestamp = e.target.value;
+        };
+        timeWrap.appendChild(timeLabel);
+        timeWrap.appendChild(timeInput);
+
+        // Note
+        const noteWrap = document.createElement("div");
+        const noteLabel = document.createElement("label");
+        noteLabel.textContent = "Ghi chú (note)";
+        const noteInput = document.createElement("textarea");
+        noteInput.value = item.note || "";
+        noteInput.oninput = (e) => {
+          currentHistory[idx].note = e.target.value;
+        };
+        noteWrap.appendChild(noteLabel);
+        noteWrap.appendChild(noteInput);
+
+        fields.appendChild(locWrap);
+        fields.appendChild(timeWrap);
+        fields.appendChild(noteWrap);
+
+        wrap.appendChild(fields);
+
+        const act = document.createElement("div");
+        act.className = "history-actions";
+        const btnDel = document.createElement("button");
+        btnDel.className = "btn btn-danger";
+        btnDel.textContent = "🗑 Xoá dòng này";
+        btnDel.onclick = () => {
+          currentHistory.splice(idx, 1);
+          renderHistory();
+        };
+        act.appendChild(btnDel);
+        wrap.appendChild(act);
+
+        historyListEl.appendChild(wrap);
+      });
+    }
+
+    /* ------------ BUTTON HANDLERS ------------ */
+
+    // Load từ Firestore
+    document.getElementById("btnLoad").onclick = async () => {
+      const docId = getDocIdFromInput();
+      if (!docId) {
+        setStatus("Vui lòng nhập đủ contract address và tokenId.", true);
+        return;
+      }
+
+      setStatus("Đang tải dữ liệu từ Firestore...");
+      docIdLabel.style.display = "inline-block";
+      docIdLabel.textContent = "Doc ID: " + docId;
+      currentDocId = docId;
+
+      try {
+        const docRef = db.collection("delivering_history").doc(docId);
+        const snap = await docRef.get();
+
+        if (!snap.exists) {
+          setStatus("Doc chưa tồn tại trong delivering_history. Bạn có thể bấm 'Tạo doc mới' để khởi tạo.", true);
+          currentHistory = [];
+          renderHistory();
+          return;
+        }
+
+        const data = snap.data();
+        currentHistory = Array.isArray(data.history) ? data.history : [];
+        setStatus("Đã load xong. Số dòng history: " + currentHistory.length);
+        renderHistory();
+      } catch (err) {
+        console.error(err);
+        setStatus("Lỗi khi load Firestore: " + err.message, true);
+      }
+    };
+
+    // Tạo doc mới (nếu chưa có)
+    document.getElementById("btnNew").onclick = async () => {
+      const docId = getDocIdFromInput();
+      if (!docId) {
+        setStatus("Vui lòng nhập đủ contract address và tokenId.", true);
+        return;
+      }
+
+      currentDocId = docId;
+      docIdLabel.style.display = "inline-block";
+      docIdLabel.textContent = "Doc ID: " + docId;
+
+      currentHistory = [];
+      renderHistory();
+      setStatus("Doc mới (chưa lưu). Hãy thêm lịch sử rồi bấm Lưu thay đổi.");
+    };
+
+    // Thêm dòng timeline
+    document.getElementById("btnAddRow").onclick = () => {
+      if (!currentDocId) {
+        const docId = getDocIdFromInput();
+        if (!docId) {
+          setStatus("Trước tiên hãy nhập contract + tokenId rồi bấm Load hoặc Tạo doc mới.", true);
+          return;
+        }
+        currentDocId = docId;
+        docIdLabel.style.display = "inline-block";
+        docIdLabel.textContent = "Doc ID: " + docId;
+      }
+
+      currentHistory.push({
+        location: "",
+        timestamp: "",
+        note: ""
+      });
+      renderHistory();
+    };
+
+    // Lưu thay đổi lên Firestore
+    document.getElementById("btnSave").onclick = async () => {
+      if (!currentDocId) {
+        setStatus("Chưa có Doc ID. Hãy nhập contract + tokenId và Load/Tạo doc.", true);
+        return;
+      }
+
+      setStatus("Đang lưu lên Firestore...");
+      try {
+        const docRef = db.collection("delivering_history").doc(currentDocId);
+        await docRef.set(
+          {
+            productId: currentDocId,
+            history: currentHistory
+          },
+          { merge: true }
+        );
+        setStatus("Đã lưu thành công!");
+      } catch (err) {
+        console.error(err);
+        setStatus("Lỗi khi lưu Firestore: " + err.message, true);
+      }
+    };
+  </script>
+</body>
+</html>
